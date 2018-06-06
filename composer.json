@@ -1,0 +1,42 @@
+{
+  "name": "spaceo-ru/purchase-verifier",
+  "description": "iOS/Android In App Purchase verification for Laravel",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Alexander Shelepov",
+      "email": "ashelepov@spaceotechnologies.ru"
+    }
+  ],
+  "require": {
+    "php": ">=7.0",
+    "guzzlehttp/guzzle": "^6.3"
+  },
+  "require-dev": {
+    "laravel/framework": "5.5.x",
+    "phpunit/phpunit": "~7.0",
+    "mockery/mockery": "^1.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "SpaceoRU\\PurchaseVerifier\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "SpaceoRU\\PurchaseVerifier\\Tests\\": "tests/"
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "extra": {
+    "laravel": {
+      "providers": [
+        "SpaceoRU\\PurchaseVerifier\\ServiceProvider"
+      ],
+      "aliases": {
+        "PurchaseVerifier": "SpaceoRU\\PurchaseVerifier\\Facade"
+      }
+    }
+  }
+}
