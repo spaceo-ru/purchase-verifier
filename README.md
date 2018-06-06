@@ -29,7 +29,7 @@ try {
 ### Errors
 
 RuntimeException will be thrown when there are general errors.
-E.g.: could not connect to the verification service because of broken internet connection.
+E.g.: when your server could not connect to the verification service because of broken internet connection.
 
 **Exception**: PurchaseVerificationException
 
