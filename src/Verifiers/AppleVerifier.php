@@ -14,6 +14,9 @@ class AppleVerifier implements Verifier
 {
     use HttpClientTrait;
 
+    const SANDBOX_URL = 'https://sandbox.itunes.apple.com/verifyReceipt';
+    const PRODUCTION_URL = 'https://buy.itunes.apple.com/verifyReceipt';
+
     /**
      * @param string $receipt
      * @throws PurchaseVerificationException
@@ -21,37 +24,32 @@ class AppleVerifier implements Verifier
      */
     public function verify(string $receipt)
     {
-        $url = $this->environmentUrl();
-        $payload = json_encode(['receipt-data' => $receipt], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
         try {
-            $client = $this->httpClient();
-            $response = $client->request('POST', $url, ['json' => $payload]);
+            $response = $this->request($this->environmentUrl(), $receipt);
 
-            if (($httpCode = $response->getStatusCode()) !== 200) {
-                throw new \RuntimeException(
-                    'Verification service returned non 200 response code',
-                    $httpCode
-                );
+            // See: https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/StoreKitGuide/Chapters/AppReview.html#//apple_ref/doc/uid/TP40008267-CH10-SW1
+            //
+            // When validating receipts on your server, your server needs to be able
+            // to handle a production-signed app getting its receipts from Apple’s test environment.
+            //
+            // The recommended approach is for your production server to
+            // always validate receipts against the production App Store first.
+            // If validation fails with the error code “Sandbox receipt used in production”,
+            // validate against the test environment instead.
+            //
+            // The App Review team reviews apps in the sandbox.
+            if ($response['status'] === 21007) {
+                $response = $this->request(self::SANDBOX_URL, $receipt);
+            } elseif ($response['status'] === 21008) {
+                $response = $this->request(self::PRODUCTION_URL, $receipt);
             }
-
-            $body = $response->getBody()->getContents();
-
-            if (empty($body)) {
-                throw new \RuntimeException(
-                    'Verification service returned empty response',
-                    500
-                );
-            }
-
-            $body = json_decode($body, true);
-
-            $status = $body['status'] ?? 500;
         } catch (\Exception $exception) {
             throw new \RuntimeException($exception->getMessage(), $exception->getCode());
         } catch (GuzzleException $exception) {
             throw new \RuntimeException($exception->getMessage(), $exception->getCode());
         }
+
+        $status = $response['status'] ?? 500;
 
         if ($status !== 0) {
             list($code, $message) = $this->statusDescription($status);
@@ -61,13 +59,47 @@ class AppleVerifier implements Verifier
     }
 
     /**
+     * @param string $url
+     * @param string $receipt
+     * @return array
+     * @throws GuzzleException
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    protected function request(string $url, string $receipt): array
+    {
+        $payload = json_encode(['receipt-data' => $receipt], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $client = $this->httpClient();
+        $response = $client->request('POST', $url, ['json' => $payload]);
+
+        if (($httpCode = $response->getStatusCode()) !== 200) {
+            throw new \RuntimeException(
+                'Verification service returned non 200 response code',
+                $httpCode
+            );
+        }
+
+        $body = $response->getBody()->getContents();
+
+        if (empty($body)) {
+            throw new \RuntimeException(
+                'Verification service returned empty response',
+                500
+            );
+        }
+
+        return json_decode($body, true);
+    }
+
+    /**
      * @return string
      */
     protected function environmentUrl(): string
     {
         return config('app.debug', true)
-            ? 'https://sandbox.itunes.apple.com/verifyReceipt'
-            : 'https://buy.itunes.apple.com/verifyReceipt';
+            ? self::SANDBOX_URL
+            : self::PRODUCTION_URL;
     }
 
     /**

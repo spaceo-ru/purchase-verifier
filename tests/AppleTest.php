@@ -4,6 +4,7 @@ namespace SpaceoRU\PurchaseVerifier\Tests;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Stream;
+use Mockery\MockInterface;
 use SpaceoRU\PurchaseVerifier\Contracts\Verifier;
 use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseVerificationException;
 use SpaceoRU\PurchaseVerifier\Verifiers\AppleVerifier;
@@ -63,7 +64,8 @@ class AppleTest extends TestCase
     }
 
     /**
-     * @covers ::verify()
+     * @covers ::request()
+     * @throws \ReflectionException
      */
     public function testAppleReturnNonSuccessHttpCode()
     {
@@ -75,11 +77,12 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(400);
         $this->expectExceptionMessage('Verification service returned non 200 response code');
 
-        $verifier->verify('receipt');
+        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt');
     }
 
     /**
-     * @covers ::verify()
+     * @covers ::request()
+     * @throws \ReflectionException
      */
     public function testAppleReturnEmptyBody()
     {
@@ -96,7 +99,30 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(500);
         $this->expectExceptionMessage('Verification service returned empty response');
 
-        $verifier->verify('receipt');
+        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt');
+    }
+
+    /**
+     * @covers ::request()
+     * @throws \ReflectionException
+     */
+    public function testRequestReturnBodyPayload()
+    {
+        list($verifier, $httpClient, $response) = $this->mock();
+
+        $body = \Mockery::mock(Stream::class);
+
+        $response->shouldReceive('getStatusCode')->andReturn(200);
+        $response->shouldReceive('getBody')->andReturn($body);
+
+        $body->shouldReceive('getContents')->andReturn(json_encode($payload = [
+            'status' => 0,
+            'receipt' => [
+                'key' => 'value'
+            ]
+        ]));
+
+        $this->assertEquals($payload, $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt'));
     }
 
     /**
@@ -139,6 +165,81 @@ class AppleTest extends TestCase
         ]));
 
         $verifier->verify('receipt');
+    }
+
+    /**
+     * @covers ::verify()
+     * @throws \Exception
+     */
+    public function testSwitchEnvironmentFromProductionToSandbox()
+    {
+        config(['app.debug' => false]);
+
+        /** @var AppleVerifier|MockInterface $verifier */
+        $verifier = \Mockery::mock(AppleVerifier::class . '[request]');
+        $verifier->shouldAllowMockingProtectedMethods();
+
+        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
+            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        })->once()->andReturn(['status' => 21007]);
+
+        config(['app.debug' => true]);
+
+        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
+            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        })->once()->andReturn(['status' => 0]);
+
+        $verifier->verify('receipt');
+    }
+
+    /**
+     * @covers ::verify()
+     * @throws \Exception
+     */
+    public function testSwitchEnvironmentFromSandboxToProduction()
+    {
+        config(['app.debug' => true]);
+
+        /** @var AppleVerifier|MockInterface $verifier */
+        $verifier = \Mockery::mock(AppleVerifier::class . '[request]');
+        $verifier->shouldAllowMockingProtectedMethods();
+
+        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
+            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        })->once()->andReturn(['status' => 21008]);
+
+        config(['app.debug' => false]);
+
+        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
+            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        })->once()->andReturn(['status' => 0]);
+
+        $verifier->verify('receipt');
+    }
+
+    /**
+     * @return string
+     * @throws \ReflectionException
+     */
+    private function environmentUrl(): string
+    {
+        $verifier = new AppleVerifier();
+        $url = new \ReflectionMethod($verifier, 'environmentUrl');
+        $url->setAccessible(true);
+
+        return $url->invoke($verifier);
+    }
+
+    /**
+     * @return \ReflectionMethod
+     * @throws \ReflectionException
+     */
+    private function requestMethod(): \ReflectionMethod
+    {
+        $method = new \ReflectionMethod(AppleVerifier::class, 'request');
+        $method->setAccessible(true);
+
+        return $method;
     }
 
     /**
