@@ -6,6 +6,8 @@ use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Stream;
 use Mockery\MockInterface;
 use SpaceoRU\PurchaseVerifier\Contracts\Verifier;
+use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseNotReadyException;
+use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseReceiptMalformed;
 use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseVerificationException;
 use SpaceoRU\PurchaseVerifier\Verifiers\AppleVerifier;
 
@@ -145,7 +147,7 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(999);
         $this->expectExceptionMessage('Internal data access error.');
 
-        $verifier->verify('receipt');
+        $verifier->verify('productId', 'receipt');
     }
 
     /**
@@ -161,10 +163,17 @@ class AppleTest extends TestCase
         $response->shouldReceive('getBody')->andReturn($body);
 
         $body->shouldReceive('getContents')->andReturn(json_encode([
-            'status' => 0
+            'status' => 0,
+            'receipt' => $receipt = [
+                'bundle_id' => 'com.example',
+                'in_app' => [
+                    'product_id' => 'com.example.product_id'
+                ]
+            ]
         ]));
 
-        $verifier->verify('receipt');
+        $verifier->shouldReceive('validatePurchase')->with('productId', $receipt);
+        $this->assertEquals($receipt, $verifier->verify('productId', 'receipt'));
     }
 
     /**
@@ -176,7 +185,7 @@ class AppleTest extends TestCase
         config(['app.debug' => false]);
 
         /** @var AppleVerifier|MockInterface $verifier */
-        $verifier = \Mockery::mock(AppleVerifier::class . '[request]');
+        $verifier = \Mockery::mock(AppleVerifier::class . '[request,validatePurchase]');
         $verifier->shouldAllowMockingProtectedMethods();
 
         $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
@@ -187,16 +196,17 @@ class AppleTest extends TestCase
 
         $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
             return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
-        })->once()->andReturn(['status' => 0]);
+        })->once()->andReturn(['status' => 0, 'receipt' => ['any']]);
 
-        $verifier->verify('receipt');
+        $verifier->shouldReceive('validatePurchase')->with('productId', ['any']);
+        $verifier->verify('productId', 'receipt');
     }
 
     /**
      * @covers ::verify()
      * @throws \Exception
      */
-    public function testSwitchEnvironmentFromSandboxToProduction()
+    public function testSwitchEnvironmentFromSandboxToProductionShouldNotWork()
     {
         config(['app.debug' => true]);
 
@@ -208,13 +218,83 @@ class AppleTest extends TestCase
             return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
         })->once()->andReturn(['status' => 21008]);
 
-        config(['app.debug' => false]);
+        $this->expectException(PurchaseVerificationException::class);
+        $this->expectExceptionMessage(
+            'This receipt is from the production environment, but it was sent to the test environment for verification.'
+        );
+        $this->expectExceptionCode(21008);
 
-        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
-            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
-        })->once()->andReturn(['status' => 0]);
+        $verifier->verify('productId', 'receipt');
+    }
 
-        $verifier->verify('receipt');
+    /**
+     * @param array $receipt
+     *
+     * @dataProvider purchaseReceiptProvider
+     * @covers ::validatePurchase()
+     * @throws \ReflectionException
+     */
+    public function testValidatePurchase(array $receipt)
+    {
+        $verifier = new AppleVerifier();
+        $validator = new \ReflectionMethod($verifier, 'validatePurchase');
+        $validator->setAccessible(true);
+
+        $bundleId = 'com.example';
+        $productId = 'com.example.product.example';
+
+        if (empty($receipt['bundle_id']) || $receipt['bundle_id'] !== $bundleId) {
+            $this->expectException(PurchaseReceiptMalformed::class);
+            $this->expectExceptionMessage('Bundle ID is malformed');
+        } elseif (empty($receipt['in_app'])) {
+            $this->expectException(PurchaseNotReadyException::class);
+            $this->expectExceptionMessage('Seems like Apple has not recorded transaction yet. Try again later');
+        } elseif (empty($receipt['in_app']['product_id']) || $receipt['in_app']['product_id'] !== $productId) {
+            $this->expectException(PurchaseReceiptMalformed::class);
+            $this->expectExceptionMessage('Product ID is malformed');
+        }
+
+        $this->assertTrue($validator->invoke($verifier, $productId, $receipt));
+    }
+
+    /**
+     * @return array
+     */
+    public function purchaseReceiptProvider(): array
+    {
+        // It is not full receipt.
+        // See https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html#//apple_ref/doc/uid/TP40010573-CH106-SW8
+        return [
+            // Valid receipt
+            [[
+                'bundle_id' => 'com.example',
+                'in_app' => [
+                    'product_id' => 'com.example.product.example'
+                ]
+            ]],
+
+            // Invalid receipt, wrong bundle_id
+            [[
+                'bundle_id' => 'com.hack',
+                'in_app' => [
+                    'product_id' => 'com.example.product.example'
+                ]
+            ]],
+
+            // Invalid receipt, wrong product_id
+            [[
+                'bundle_id' => 'com.example',
+                'in_app' => [
+                    'product_id' => 'com.hack.product.example'
+                ]
+            ]],
+
+            // Invalid receipt, missed in_app
+            [[
+                'bundle_id' => 'com.example',
+                'in_app' => []
+            ]]
+        ];
     }
 
     /**
@@ -250,7 +330,9 @@ class AppleTest extends TestCase
         config(['app.debug' => true]);
 
         /** @var Verifier|\Mockery\MockInterface $verifier */
-        $verifier = \Mockery::mock(AppleVerifier::class . '[httpClient]');
+        $verifier = \Mockery::mock(AppleVerifier::class . '[httpClient,validatePurchase]');
+        $verifier->shouldAllowMockingProtectedMethods();
+
         $httpClient = \Mockery::mock(Client::class);
         $response = \Mockery::mock(Response::class);
 

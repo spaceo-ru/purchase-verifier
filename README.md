@@ -1,5 +1,7 @@
 # Laravel In-App Purchase Verifier
 
+**Note**: Only for the single purchases. Subscriptions has not handled yet (pull requests are welcome).
+
 ## Installation
 
 Require this package with composer
@@ -18,18 +20,29 @@ Development environment (Apple Sandbox) will be used if `APP_DEBUG` is true.
 $receipt = 'base64 encoded receipt';
 
 try {
-    \PurchaseVerifier::google($receipt);
-    \PurchaseVerifier::apple($receipt);
+    $verifiedReceipt = \PurchaseVerifier::apple($receipt);
 } catch (PurcahseVerificationException $exception) {
     //
 } catch (\RuntimeException $exception) {
     //
+} catch (PurchaseNotReadyException $exception) {
+    //
 }
 ```
+
+`$verifiedReceipt` is array equals to:
+- Apple: https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
+
 ### Errors
 
-RuntimeException will be thrown when there are general errors.
+`RuntimeException` will be thrown when there are general errors.
 E.g.: when your server could not connect to the verification service because of broken internet connection.
+
+`PurchaseNotReadyException` will be thrown when the transaction has not recorded by Apple yet. 
+It means your client should retry the request later.
+
+`PurchaseReceiptMalformed` will be thrown then the receipt is broken.
+E.g.: `$productId` does not match returned `product_id` from Apple.
 
 **Exception**: PurchaseVerificationException
 

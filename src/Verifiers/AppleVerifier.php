@@ -3,6 +3,8 @@ namespace SpaceoRU\PurchaseVerifier\Verifiers;
 
 use GuzzleHttp\Exception\GuzzleException;
 use SpaceoRU\PurchaseVerifier\Contracts\Verifier;
+use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseNotReadyException;
+use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseReceiptMalformed;
 use SpaceoRU\PurchaseVerifier\Exceptions\PurchaseVerificationException;
 use SpaceoRU\PurchaseVerifier\HttpClientTrait;
 
@@ -18,11 +20,15 @@ class AppleVerifier implements Verifier
     const PRODUCTION_URL = 'https://buy.itunes.apple.com/verifyReceipt';
 
     /**
+     * @param string $productId
      * @param string $receipt
+     * @return array
      * @throws PurchaseVerificationException
      * @throws \RuntimeException
+     * @throws PurchaseNotReadyException
+     * @throws PurchaseReceiptMalformed
      */
-    public function verify(string $receipt)
+    public function verify(string $productId, string $receipt): array
     {
         try {
             $response = $this->request($this->environmentUrl(), $receipt);
@@ -40,8 +46,6 @@ class AppleVerifier implements Verifier
             // The App Review team reviews apps in the sandbox.
             if ($response['status'] === 21007) {
                 $response = $this->request(self::SANDBOX_URL, $receipt);
-            } elseif ($response['status'] === 21008) {
-                $response = $this->request(self::PRODUCTION_URL, $receipt);
             }
         } catch (\Exception $exception) {
             throw new \RuntimeException($exception->getMessage(), $exception->getCode());
@@ -56,6 +60,10 @@ class AppleVerifier implements Verifier
 
             throw new PurchaseVerificationException($message, $code);
         }
+
+        $this->validatePurchase($productId, $response['receipt'] ?? []);
+
+        return $response['receipt'];
     }
 
     /**
@@ -149,5 +157,31 @@ class AppleVerifier implements Verifier
         }
 
         return [$status, $description];
+    }
+
+    /**
+     * @param string $productId
+     * @param array $receipt
+     * @return bool
+     * @throws PurchaseNotReadyException
+     * @throws PurchaseReceiptMalformed
+     */
+    protected function validatePurchase(string $productId, array $receipt): bool
+    {
+        $bundleId = config('purchase-verifier.apple.bundle_id');
+
+        if (empty($receipt['bundle_id']) || $receipt['bundle_id'] !== $bundleId) {
+            throw new PurchaseReceiptMalformed('Bundle ID is malformed');
+        }
+
+        if (empty($receipt['in_app'])) {
+            throw new PurchaseNotReadyException('Seems like Apple has not recorded transaction yet. Try again later');
+        }
+
+        if (empty($receipt['in_app']['product_id']) || $receipt['in_app']['product_id'] !== $productId) {
+            throw new PurchaseReceiptMalformed('Product ID is malformed');
+        }
+
+        return true;
     }
 }

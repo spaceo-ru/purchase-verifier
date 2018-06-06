@@ -22,6 +22,8 @@ class ServiceProvider extends \Illuminate\Support\ServiceProvider
      */
     public function register()
     {
+        $this->mergeConfigFrom(__DIR__ . '/config/purchase-verifier.php', 'purchase-verifier');
+
         $this->app->singleton('purchase.verifier', function (Application $app) {
             return new PurchaseVerifier($app);
         });
@@ -32,6 +34,8 @@ class ServiceProvider extends \Illuminate\Support\ServiceProvider
      */
     public function boot()
     {
-        //
+        $this->publishes([
+            __DIR__ . '/config/purchase-verifier.php' => config_path('purchase-verifier.php'),
+        ]);
     }
 }

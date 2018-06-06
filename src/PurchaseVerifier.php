@@ -25,25 +25,29 @@ class PurchaseVerifier
     }
 
     /**
-     * @param string $receipt Purchase Receipt (Base64)
+     * @param string $productId
+     * @param string $receipt
      * @return void
      * @throws \LogicException
      */
-    public function google(string $receipt)
+    public function google(string $productId, string $receipt)
     {
         throw new \LogicException('Google verification has not implemented yet');
     }
 
     /**
-     * @param string $receipt Purchase Receipt (Base64)
-     * @return void
+     * @param string $productId
+     * @param string $receipt
+     * @return array
+     * @throws Exceptions\PurchaseNotReadyException
+     * @throws Exceptions\PurchaseReceiptMalformed
      * @throws Exceptions\PurchaseVerificationException
-     * @throws \RuntimeException
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
-    public function apple(string $receipt)
+    public function apple(string $productId, string $receipt): array
     {
-        $this->createVerifier('apple')->verify($receipt);
+        return $this->createVerifier('apple')->verify($productId, $receipt);
     }
 
     /**
