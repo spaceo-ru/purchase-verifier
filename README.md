@@ -1,6 +1,6 @@
 # Laravel In-App Purchase Verifier
 
-**Note**: Only for the single purchases. Subscriptions has not handled yet (pull requests are welcome).
+**Note**: Only for the non-consumable products. Subscriptions has not handled yet (pull requests are welcome).
 
 ## Installation
 
