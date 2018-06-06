@@ -23,9 +23,11 @@ try {
     $verifiedReceipt = \PurchaseVerifier::apple($receipt);
 } catch (PurcahseVerificationException $exception) {
     //
-} catch (\RuntimeException $exception) {
+} catch (PurchaseReceiptMalformed $exception) {
     //
 } catch (PurchaseNotReadyException $exception) {
+    //
+} catch (\RuntimeException $exception) {
     //
 }
 ```
