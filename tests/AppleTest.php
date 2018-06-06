@@ -157,10 +157,10 @@ class AppleTest extends TestCase
 
         $httpClient->shouldReceive('request')->withArgs(function ($method, $url, $options) {
             return [$method, $url, $options] === [
-                    'POST',
-                    'https://sandbox.itunes.apple.com/verifyReceipt',
-                    ['json' => json_encode(['receipt-data' => 'receipt'])]
-                ];
+                'POST',
+                'https://sandbox.itunes.apple.com/verifyReceipt',
+                ['json' => json_encode(['receipt-data' => 'receipt'])]
+            ];
         })->andReturn($response);
 
         return [$verifier, $httpClient, $response];
