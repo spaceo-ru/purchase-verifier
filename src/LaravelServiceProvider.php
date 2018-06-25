@@ -4,10 +4,10 @@ namespace SpaceoRU\PurchaseVerifier;
 use Illuminate\Foundation\Application;
 
 /**
- * Class ServiceProvider
+ * Class LaravelServiceProvider
  * @package SpaceoRU\PurchaseVerifier
  */
-class ServiceProvider extends \Illuminate\Support\ServiceProvider
+class LaravelServiceProvider extends \Illuminate\Support\ServiceProvider
 {
     /**
      * @return array

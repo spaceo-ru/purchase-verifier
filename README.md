@@ -18,9 +18,10 @@ Development environment (Apple Sandbox) will be used if `APP_DEBUG` is true.
 
 ```php
 $receipt = 'base64 encoded receipt';
+$productId = '...';
 
 try {
-    $verifiedReceipt = \PurchaseVerifier::apple($receipt);
+    $verifiedReceipt = \PurchaseVerifier::apple($productId, $receipt);
 } catch (PurcahseVerificationException $exception) {
     //
 } catch (PurchaseReceiptMalformed $exception) {

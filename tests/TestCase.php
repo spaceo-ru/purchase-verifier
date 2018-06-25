@@ -3,8 +3,8 @@ namespace SpaceoRU\PurchaseVerifier\Tests;
 
 use Illuminate\Config\Repository;
 use Illuminate\Foundation\Application;
+use SpaceoRU\PurchaseVerifier\LaravelServiceProvider;
 use SpaceoRU\PurchaseVerifier\PurchaseVerifier;
-use SpaceoRU\PurchaseVerifier\ServiceProvider;
 
 /**
  * Class TestCase
@@ -20,7 +20,7 @@ abstract class TestCase extends \Illuminate\Foundation\Testing\TestCase
         $app = new Application();
         $app->setBasePath(realpath(__DIR__ . '/../'));
         $app->instance('config', new Repository());
-        $app->register(ServiceProvider::class);
+        $app->register(LaravelServiceProvider::class);
         $app->boot();
 
         return $app;
