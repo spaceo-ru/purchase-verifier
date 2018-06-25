@@ -44,8 +44,10 @@ E.g.: when your server could not connect to the verification service because of 
 `PurchaseNotReadyException` will be thrown when the transaction has not recorded by Apple yet. 
 It means your client should retry the request later.
 
-`PurchaseReceiptMalformed` will be thrown then the receipt is broken.
+`PurchaseReceiptMalformed` will be thrown when the receipt is broken.
 E.g.: `$productId` does not match returned `product_id` from Apple.
+
+`PurcahseVerificationException` will be thrown when Apple returns non-zero code (see below).
 
 **Exception**: PurchaseVerificationException
 
