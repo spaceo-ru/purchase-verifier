@@ -79,7 +79,7 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(400);
         $this->expectExceptionMessage('Verification service returned non 200 response code');
 
-        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt');
+        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), ['receipt-data' => 'receipt']);
     }
 
     /**
@@ -101,7 +101,7 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(500);
         $this->expectExceptionMessage('Verification service returned empty response');
 
-        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt');
+        $this->requestMethod()->invoke($verifier, $this->environmentUrl(), ['receipt-data' => 'receipt']);
     }
 
     /**
@@ -124,7 +124,10 @@ class AppleTest extends TestCase
             ]
         ]));
 
-        $this->assertEquals($payload, $this->requestMethod()->invoke($verifier, $this->environmentUrl(), 'receipt'));
+        $this->assertEquals(
+            $payload,
+            $this->requestMethod()->invoke($verifier, $this->environmentUrl(), ['receipt-data' => 'receipt'])
+        );
     }
 
     /**
@@ -147,7 +150,7 @@ class AppleTest extends TestCase
         $this->expectExceptionCode(999);
         $this->expectExceptionMessage('Internal data access error.');
 
-        $verifier->verify('productId', 'receipt');
+        $verifier->verify('productId', 'receipt', false);
     }
 
     /**
@@ -172,8 +175,8 @@ class AppleTest extends TestCase
             ]
         ]));
 
-        $verifier->shouldReceive('validatePurchase')->with('productId', $receipt);
-        $this->assertEquals($receipt, $verifier->verify('productId', 'receipt'));
+        $verifier->shouldReceive('validatePurchase')->with('productId', $receipt, null);
+        $this->assertEquals(['receipt' => $receipt, 'latest_receipt_info' => null], $verifier->verify('productId', 'receipt', false));
     }
 
     /**
@@ -188,18 +191,18 @@ class AppleTest extends TestCase
         $verifier = \Mockery::mock(AppleVerifier::class . '[request,validatePurchase]');
         $verifier->shouldAllowMockingProtectedMethods();
 
-        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
-            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        $verifier->shouldReceive('request')->withArgs(function ($url, $data) {
+            return [$url, $data] === [$this->environmentUrl(), ['receipt-data' => 'receipt']];
         })->once()->andReturn(['status' => 21007]);
 
         config(['app.debug' => true]);
 
-        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
-            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        $verifier->shouldReceive('request')->withArgs(function ($url, $data) {
+            return [$url, $data] === [$this->environmentUrl(), ['receipt-data' => 'receipt']];
         })->once()->andReturn(['status' => 0, 'receipt' => ['any']]);
 
-        $verifier->shouldReceive('validatePurchase')->with('productId', ['any']);
-        $verifier->verify('productId', 'receipt');
+        $verifier->shouldReceive('validatePurchase')->with('productId', ['any'], null);
+        $verifier->verify('productId', 'receipt', false);
     }
 
     /**
@@ -214,8 +217,8 @@ class AppleTest extends TestCase
         $verifier = \Mockery::mock(AppleVerifier::class . '[request]');
         $verifier->shouldAllowMockingProtectedMethods();
 
-        $verifier->shouldReceive('request')->withArgs(function ($url, $receipt) {
-            return [$url, $receipt] === [$this->environmentUrl(), 'receipt'];
+        $verifier->shouldReceive('request')->withArgs(function ($url, $data) {
+            return [$url, $data] === [$this->environmentUrl(), ['receipt-data' => 'receipt']];
         })->once()->andReturn(['status' => 21008]);
 
         $this->expectException(PurchaseVerificationException::class);
@@ -224,7 +227,7 @@ class AppleTest extends TestCase
         );
         $this->expectExceptionCode(21008);
 
-        $verifier->verify('productId', 'receipt');
+        $verifier->verify('productId', 'receipt', false);
     }
 
     /**
@@ -243,6 +246,8 @@ class AppleTest extends TestCase
         $bundleId = 'com.example';
         $productId = 'com.example.product.example';
 
+        $latestReceiptInfo = [['product_id' => $productId]];
+
         if (empty($receipt['bundle_id']) || $receipt['bundle_id'] !== $bundleId) {
             $this->expectException(PurchaseReceiptMalformed::class);
             $this->expectExceptionMessage('Bundle ID is malformed');
@@ -254,7 +259,35 @@ class AppleTest extends TestCase
             $this->expectExceptionMessage('Product ID is malformed');
         }
 
-        $this->assertTrue($validator->invoke($verifier, $productId, $receipt));
+        $this->assertTrue($validator->invoke($verifier, $productId, $receipt, $latestReceiptInfo));
+    }
+
+    /**
+     * @throws PurchaseNotReadyException
+     * @throws PurchaseReceiptMalformed
+     * @throws PurchaseVerificationException
+     * @throws \RuntimeException
+     */
+    public function testThrowsErrorWhenSubscriptionReceiptPasswordWrong()
+    {
+        /** @var AppleVerifier|MockInterface $verifier */
+        $verifier = \Mockery::mock(AppleVerifier::class . '[request]');
+        $verifier->shouldAllowMockingProtectedMethods();
+
+        $verifier->shouldReceive('request')->withArgs(function ($url, $data) {
+            return [$url, $data] === [$this->environmentUrl(), [
+                'receipt-data' => 'receipt',
+                'password' => config('purchase-verifier.apple.shared_secret')
+            ]];
+        })->once()->andReturn(['status' => 21004]);
+
+        $this->expectException(PurchaseVerificationException::class);
+        $this->expectExceptionMessage(
+            'The shared secret you provided does not match the shared secret on file for your account.'
+        );
+        $this->expectExceptionCode(21004);
+
+        $verifier->verify('productId', 'receipt', true);
     }
 
     /**

@@ -14,11 +14,12 @@ interface Verifier
     /**
      * @param string $receipt
      * @param string $productId
+     * @param bool $subscription
      * @return array
      * @throws \RuntimeException
      * @throws PurchaseVerificationException
      * @throws PurchaseNotReadyException
      * @throws PurchaseReceiptMalformed
      */
-    public function verify(string $productId, string $receipt): array;
+    public function verify(string $productId, string $receipt, bool $subscription = false): array;
 }

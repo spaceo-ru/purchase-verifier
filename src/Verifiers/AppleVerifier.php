@@ -22,16 +22,21 @@ class AppleVerifier implements Verifier
     /**
      * @param string $productId
      * @param string $receipt
+     * @param bool $subscription
      * @return array
-     * @throws PurchaseVerificationException
-     * @throws \RuntimeException
      * @throws PurchaseNotReadyException
      * @throws PurchaseReceiptMalformed
+     * @throws PurchaseVerificationException
+     * @throws \RuntimeException
      */
-    public function verify(string $productId, string $receipt): array
+    public function verify(string $productId, string $receipt, bool $subscription = false): array
     {
         try {
-            $response = $this->request($this->environmentUrl(), $receipt);
+            $data = $subscription
+                ? ['receipt-data' => $receipt, 'password' => config('purchase-verifier.apple.shared_secret')]
+                : ['receipt-data' => $receipt];
+
+            $response = $this->request($this->environmentUrl(), $data);
 
             // See: https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/StoreKitGuide/Chapters/AppReview.html#//apple_ref/doc/uid/TP40008267-CH10-SW1
             //
@@ -45,7 +50,7 @@ class AppleVerifier implements Verifier
             //
             // The App Review team reviews apps in the sandbox.
             if ($response['status'] === 21007) {
-                $response = $this->request(self::SANDBOX_URL, $receipt);
+                $response = $this->request(self::SANDBOX_URL, $data);
             }
         } catch (\Exception $exception) {
             throw new \RuntimeException($exception->getMessage(), $exception->getCode());
@@ -61,22 +66,31 @@ class AppleVerifier implements Verifier
             throw new PurchaseVerificationException($message, $code);
         }
 
-        $this->validatePurchase($productId, $response['receipt'] ?? []);
+        $this->validatePurchase(
+            $productId,
+            $response['receipt'] ?? [],
+            $subscription ? ($response['latest_receipt_info'] ?? []) : null
+        );
 
-        return $response['receipt'];
+        return [
+            'receipt' => $response['receipt'],
+            'latest_receipt_info' => !empty($response['latest_receipt_info'])
+                ? end($response['latest_receipt_info'])
+                : null
+        ];
     }
 
     /**
      * @param string $url
-     * @param string $receipt
+     * @param array $data
      * @return array
      * @throws GuzzleException
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      */
-    protected function request(string $url, string $receipt): array
+    protected function request(string $url, array $data): array
     {
-        $payload = json_encode(['receipt-data' => $receipt], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $client = $this->httpClient();
         $response = $client->request('POST', $url, ['json' => $payload]);
@@ -129,6 +143,10 @@ class AppleVerifier implements Verifier
                 $description = 'The receipt could not be authenticated.';
                 break;
 
+            case 21004:
+                $description = 'The shared secret you provided does not match the shared secret on file for your account.';
+                break;
+
             case 21005:
                 $description = 'The receipt server is not currently available.';
                 break;
@@ -162,11 +180,12 @@ class AppleVerifier implements Verifier
     /**
      * @param string $productId
      * @param array $receipt
+     * @param array|null $latestReceipts
      * @return bool
      * @throws PurchaseNotReadyException
      * @throws PurchaseReceiptMalformed
      */
-    protected function validatePurchase(string $productId, array $receipt): bool
+    protected function validatePurchase(string $productId, array $receipt, array $latestReceipts = null): bool
     {
         $bundleId = config('purchase-verifier.apple.bundle_id');
 
@@ -180,6 +199,18 @@ class AppleVerifier implements Verifier
 
         if (empty($receipt['in_app']['product_id']) || $receipt['in_app']['product_id'] !== $productId) {
             throw new PurchaseReceiptMalformed('Product ID is malformed');
+        }
+
+        if (null !== $latestReceipts) {
+            if (empty($latestReceipts)) {
+                throw new PurchaseNotReadyException('Subscription receipt does not have any transactions');
+            }
+
+            $latest = end($latestReceipts);
+
+            if (!isset($latest['product_id']) || $latest['product_id'] !== $productId) {
+                throw new PurchaseReceiptMalformed('Product ID is malformed');
+            }
         }
 
         return true;

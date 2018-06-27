@@ -38,6 +38,7 @@ class PurchaseVerifier
     /**
      * @param string $productId
      * @param string $receipt
+     * @param bool $subscription
      * @return array
      * @throws Exceptions\PurchaseNotReadyException
      * @throws Exceptions\PurchaseReceiptMalformed
@@ -45,9 +46,9 @@ class PurchaseVerifier
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      */
-    public function apple(string $productId, string $receipt): array
+    public function apple(string $productId, string $receipt, bool $subscription = false): array
     {
-        return $this->createVerifier('apple')->verify($productId, $receipt);
+        return $this->createVerifier('apple')->verify($productId, $receipt, $subscription);
     }
 
     /**
