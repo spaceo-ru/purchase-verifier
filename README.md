@@ -20,7 +20,7 @@ $productId = '...';
 
 try {
     $verified = \PurchaseVerifier::apple($productId, $receipt, $isSubscriptionReceipt);
-} catch (PurcahseVerificationException $exception) {
+} catch (PurchaseVerificationException $exception) {
     //
 } catch (PurchaseReceiptMalformed $exception) {
     //

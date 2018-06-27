@@ -1,7 +1,6 @@
 <?php
 namespace SpaceoRU\PurchaseVerifier;
 
-use Illuminate\Foundation\Application;
 use SpaceoRU\PurchaseVerifier\Contracts\Verifier;
 use SpaceoRU\PurchaseVerifier\Verifiers\AppleVerifier;
 
@@ -11,19 +10,6 @@ use SpaceoRU\PurchaseVerifier\Verifiers\AppleVerifier;
  */
 class PurchaseVerifier
 {
-    /**
-     * @var Application
-     */
-    protected $app;
-
-    /**
-     * @param Application $app
-     */
-    public function __construct(Application $app)
-    {
-        $this->app = $app;
-    }
-
     /**
      * @param string $productId
      * @param string $receipt
