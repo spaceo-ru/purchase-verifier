@@ -375,7 +375,7 @@ class AppleTest extends TestCase
             return [$method, $url, $options] === [
                 'POST',
                 'https://sandbox.itunes.apple.com/verifyReceipt',
-                ['json' => json_encode(['receipt-data' => 'receipt'])]
+                ['json' => ['receipt-data' => 'receipt']]
             ];
         })->andReturn($response);
 

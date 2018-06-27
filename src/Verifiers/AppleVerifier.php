@@ -90,10 +90,8 @@ class AppleVerifier implements Verifier
      */
     protected function request(string $url, array $data): array
     {
-        $payload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
         $client = $this->httpClient();
-        $response = $client->request('POST', $url, ['json' => $payload]);
+        $response = $client->request('POST', $url, ['json' => $data]);
 
         if (($httpCode = $response->getStatusCode()) !== 200) {
             throw new \RuntimeException(
