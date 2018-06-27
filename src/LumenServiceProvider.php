@@ -46,8 +46,6 @@ class LumenServiceProvider extends \Illuminate\Support\ServiceProvider
      */
     public function boot()
     {
-        $this->publishes([
-            __DIR__ . '/config/purchase-verifier.php' => config_path('purchase-verifier.php'),
-        ]);
+        //
     }
 }
