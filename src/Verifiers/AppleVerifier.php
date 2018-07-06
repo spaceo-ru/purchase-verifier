@@ -195,7 +195,7 @@ class AppleVerifier implements Verifier
             throw new PurchaseNotReadyException('Seems like Apple has not recorded transaction yet. Try again later');
         }
 
-        if (empty($receipt['in_app']['product_id']) || $receipt['in_app']['product_id'] !== $productId) {
+        if (empty($receipt['in_app']) || !collect($receipt['in_app'])->contains('product_id', $productId)) {
             throw new PurchaseReceiptMalformed('Product ID is malformed');
         }
 
@@ -204,9 +204,13 @@ class AppleVerifier implements Verifier
                 throw new PurchaseNotReadyException('Subscription receipt does not have any transactions');
             }
 
-            $latest = end($latestReceipts);
+            $latestReceipts = collect($latestReceipts)
+                ->where('product_id', $productId)
+                ->sortBy('expiresAt');
 
-            if (!isset($latest['product_id']) || $latest['product_id'] !== $productId) {
+            $latest = $latestReceipts->last();
+
+            if (!isset($latest['product_id'])) {
                 throw new PurchaseReceiptMalformed('Product ID is malformed');
             }
         }
