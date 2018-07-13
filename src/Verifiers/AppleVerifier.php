@@ -77,7 +77,7 @@ class AppleVerifier implements Verifier
         if (!empty($response['latest_receipt_info'])) {
             $latestReceipts = collect($response['latest_receipt_info'])
                 ->where('product_id', $productId)
-                ->sortBy('expiresAt');
+                ->sortBy('expires_date_ms');
 
             $latestReceipt = $latestReceipts->last();
         }
@@ -214,7 +214,7 @@ class AppleVerifier implements Verifier
 
             $latestReceipts = collect($latestReceipts)
                 ->where('product_id', $productId)
-                ->sortBy('expiresAt');
+                ->sortBy('expires_date_ms');
 
             $latest = $latestReceipts->last();
 
