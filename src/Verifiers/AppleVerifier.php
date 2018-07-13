@@ -72,11 +72,19 @@ class AppleVerifier implements Verifier
             $subscription ? ($response['latest_receipt_info'] ?? []) : null
         );
 
+        $latestReceipt = null;
+
+        if (!empty($response['latest_receipt_info'])) {
+            $latestReceipts = collect($response['latest_receipt_info'])
+                ->where('product_id', $productId)
+                ->sortBy('expiresAt');
+
+            $latestReceipt = $latestReceipts->last();
+        }
+
         return [
             'receipt' => $response['receipt'],
-            'latest_receipt_info' => !empty($response['latest_receipt_info'])
-                ? end($response['latest_receipt_info'])
-                : null
+            'latest_receipt_info' => $latestReceipt
         ];
     }
 
